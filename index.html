@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فضاء الأفكار - وضع الورق المريح</title>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #fdf6e3; 
+            --sidebar-bg: #f0e4d4;
+            --text-color: #2c2c2c;
+            --normal-node: #ffffff;
+            --normal-text: #2c2c2c;
+            --medium-node: #ffe0b2; 
+            --medium-text: #2c2c2c;
+            --important-node: #ffcdd2; 
+            --important-text: #2c2c2c;
+            --primary: #5d4037; 
+            --shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body { font-family: 'Amiri', serif; display: flex; height: 100vh; overflow: hidden; background-color: var(--bg-color); color: var(--text-color); }
+        
+        #toggle-sidebar {
+            position: fixed; top: 15px; right: 15px; z-index: 1000;
+            background: white; color: var(--primary); border: 2px solid var(--primary); padding: 8px 15px; border-radius: 8px;
+            box-shadow: var(--shadow); cursor: pointer; font-size: 1.2rem; transition: 0.3s; font-family: inherit; font-weight: bold;
+        }
+        #toggle-sidebar:hover { background: var(--primary); color: white; }
+
+        #save-status {
+            position: fixed; top: 15px; left: 50%; transform: translateX(-50%); z-index: 1000;
+            background: #d4edda; color: #155724; padding: 5px 15px; border-radius: 20px;
+            font-size: 14px; font-weight: bold; border: 1px solid #c3e6cb;
+            opacity: 0; transition: opacity 0.5s; pointer-events: none;
+        }
+
+        #sidebar { 
+            width: 270px; background: var(--sidebar-bg); box-shadow: -2px 0 10px rgba(0,0,0,0.05); 
+            z-index: 100; display: flex; flex-direction: column; transition: transform 0.3s; position: relative; border-left: 1px solid #e0d5c1;
+        }
+        #sidebar.hidden { transform: translateX(100%); position: absolute; height: 100%; }
+        
+        .sidebar-header { padding: 20px; background: #e6d8c3; text-align: center; font-weight: bold; font-size: 1.3rem; border-bottom: 1px solid #d4c5af; margin-top: 50px; }
+        
+        .safety-panel { padding: 15px; display: flex; gap: 10px; flex-direction: column; border-bottom: 1px solid #d4c5af;}
+        .btn-safe { background: white; color: var(--primary); border: 1px solid var(--primary); padding: 10px; border-radius: 6px; cursor: pointer; font-family: inherit; font-weight: bold; transition: 0.2s; text-align: center; font-size: 16px;}
+        .btn-safe:hover { background: var(--primary); color: white; }
+        .btn-safe.backup { background: var(--primary); color: white; }
+
+        #page-list { overflow-y: auto; flex: 1; }
+        .page-item { padding: 12px 20px; cursor: pointer; border-bottom: 1px solid #e0d5c1; transition: 0.2s; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; }
+        .page-item:hover { background: #e6d8c3; }
+        .page-item.active { background: white; color: var(--primary); font-weight: bold; border-right: 4px solid var(--primary); }
+        .edit-hint { font-size: 10px; color: #999; opacity: 0; transition: 0.2s; }
+        .page-item:hover .edit-hint { opacity: 1; }
+        
+        #main-container { 
+            flex: 1; position: relative; overflow: hidden; 
+            background-image: radial-gradient(rgba(93, 64, 55, 0.1) 2px, transparent 2px); background-size: 30px 30px;
+        }
+        #main-container.panning { cursor: grab; }
+        #main-container.panning:active { cursor: grabbing; }
+
+        #canvas-wrapper { position: absolute; width: 10000px; height: 10000px; transform-origin: 0 0; }
+        #canvas { position: absolute; width: 100%; height: 100%; top: 0; left: 0; }
+        
+        #svg-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: visible;}
+        line { stroke: #795548; stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.2)); }
+        .temp-line { stroke: #d32f2f; stroke-width: 4; stroke-dasharray: 8,8; }
+
+        .node {
+            position: absolute; padding: 15px 25px; min-width: 60px; min-height: 40px; width: max-content;
+            border-radius: 8px; box-shadow: var(--shadow); cursor: move; z-index: 10;
+            outline: none; border: 2px solid transparent; transition: transform 0.2s, box-shadow 0.2s, background 0.3s;
+            white-space: pre-wrap; display: inline-block; text-align: center; font-family: 'Amiri', serif;
+        }
+        .node * { user-select: text; }
+        .node:focus { box-shadow: 0 0 0 3px var(--primary); cursor: text; }
+        .node.selected { border: 2px dashed var(--primary); transform: scale(1.02); }
+        
+        .node.type-normal { background: var(--normal-node); color: var(--normal-text); font-size: 20px; font-weight: bold; border: 1px solid #d4c5af;}
+        .node.type-medium { background: var(--medium-node); color: var(--medium-text); font-size: 26px; padding: 20px 35px; font-weight: bold; border: 1px solid #ffb74d;}
+        .node.type-important { background: var(--important-node); color: var(--important-text); font-size: 32px; padding: 25px 45px; font-weight: bold; border: 1px solid #ef5350; box-shadow: 0 8px 20px rgba(239, 83, 80, 0.3); }
+
+        .node-handle {
+            position: absolute; width: 16px; height: 16px; background: var(--primary);
+            border-radius: 50%; opacity: 0; transition: opacity 0.2s; cursor: crosshair; z-index: 20;
+            border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .node:hover .node-handle { opacity: 1; transform: scale(1.2); }
+        .handle-top { top: -8px; left: 50%; transform: translateX(-50%); }
+        .handle-bottom { bottom: -8px; left: 50%; transform: translateX(-50%); }
+        .handle-left { left: -8px; top: 50%; transform: translateY(-50%); }
+        .handle-right { right: -8px; top: 50%; transform: translateY(-50%); }
+
+        #toolbar {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: white; padding: 12px; border-radius: 50px; box-shadow: var(--shadow);
+            display: none; gap: 15px; z-index: 1000; align-items: center; border: 1px solid #e0d5c1;
+        }
+        .color-btn { width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 1px solid #ccc; transition: 0.2s; }
+        .color-btn:hover { transform: scale(1.2); }
+        .btn-normal { background: var(--normal-node); }
+        .btn-medium { background: var(--medium-node); }
+        .btn-important { background: var(--important-node); }
+        #btn-delete { background: #e63946; color: white; border: none; padding: 8px 20px; border-radius: 20px; cursor: pointer; font-family: inherit; font-weight: bold; font-size: 16px;}
+
+        #selection-box { position: absolute; border: 2px dashed var(--primary); background: rgba(93, 64, 55, 0.1); z-index: 5; pointer-events: none; display: none; }
+        .group-container { position: absolute; border: 2px solid rgba(93, 64, 55, 0.3); background: rgba(255,255,255,0.4); border-radius: 15px; z-index: 2; pointer-events: none; }
+        .group-title { position: absolute; top: -35px; right: 10px; color: var(--primary); font-size: 22px; font-weight: bold; background: var(--bg-color); padding: 0 10px; pointer-events: auto; cursor: text;}
+        #btn-group-create { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: var(--primary); color: white; border: none; padding: 10px 25px; border-radius: 30px; font-weight: bold; font-family: inherit; font-size: 18px; cursor: pointer; display: none; z-index: 1000; box-shadow: var(--shadow); }
+    </style>
+</head>
+<body>
+
+    <button id="toggle-sidebar">☰ الفهرس</button>
+    <div id="save-status">تم الحفظ تلقائياً ✓</div>
+    <button id="btn-group-create" onclick="createGroup()">إنشاء مجموعة</button>
+
+    <div id="sidebar">
+        <div class="sidebar-header">فضاء التفكير</div>
+        <div class="safety-panel">
+            <button class="btn-safe backup" onclick="backupData()">📥 تحميل نسخة لحاسوبي</button>
+            <button class="btn-safe" onclick="document.getElementById('import-file').click()">📤 استرجاع بياناتي</button>
+            <input type="file" id="import-file" style="display:none" accept=".json" onchange="restoreData(event)">
+        </div>
+        <div id="page-list"></div>
+    </div>
+
+    <div id="main-container">
+        <div id="canvas-wrapper">
+            <div id="canvas">
+                <div id="selection-box"></div>
+                <svg id="svg-canvas"></svg>
+            </div>
+        </div>
+    </div>
+
+    <div id="toolbar">
+        <span style="font-size: 16px; color: var(--text-color); font-weight:bold;">الأهمية:</span>
+        <div class="color-btn btn-normal" onclick="changeType('type-normal')" title="عادية"></div>
+        <div class="color-btn btn-medium" onclick="changeType('type-medium')" title="متوسطة"></div>
+        <div class="color-btn btn-important" onclick="changeType('type-important')" title="مهمة"></div>
+        <div style="width: 2px; height: 25px; background: #e0d5c1; margin: 0 5px;"></div>
+        <button id="btn-delete" onclick="deleteActiveNodes()">حذف</button>
+    </div>
+
+    <script>
+        let appData = JSON.parse(localStorage.getItem('brain_space_amiri')) || { workspaces: {}, pageNames: {} };
+        let currentPage = 1;
+        
+        let zoomLevel = 1;
+        let panX = -4000, panY = -4000; 
+        let isSpaceDown = false, isPanning = false, startPanX = 0, startPanY = 0;
+        
+        let activeNode = null, draggedNode = null, dragOffsetX = 0, dragOffsetY = 0;
+        let selectedNodes = new Set();
+        let isSelecting = false, selStartX = 0, selStartY = 0;
+        let isDrawingLine = false, startConnectNodeId = null, tempLine = null;
+
+        const mainContainer = document.getElementById('main-container');
+        const canvasWrapper = document.getElementById('canvas-wrapper');
+        const canvas = document.getElementById('canvas');
+        const svgCanvas = document.getElementById('svg-canvas');
+        const selectionBoxEl = document.getElementById('selection-box');
+        const btnGroupCreate = document.getElementById('btn-group-create');
+        const saveStatus = document.getElementById('save-status');
+
+        let saveTimeout;
+
+        function init() {
+            const pageList = document.getElementById('page-list');
+            pageList.innerHTML = '';
+            
+            // التأكد من وجود أسماء الصفحات في البيانات
+            if(!appData.pageNames) appData.pageNames = {};
+
+            for (let i = 1; i <= 30; i++) {
+                if (!appData.workspaces[i]) appData.workspaces[i] = { nodes: [], connections: [], groups: [] };
+                if (!appData.pageNames[i]) appData.pageNames[i] = `مساحة التفكير رقم ${i}`;
+
+                const div = document.createElement('div');
+                div.className = `page-item ${i === currentPage ? 'active' : ''}`;
+                
+                const textSpan = document.createElement('span');
+                textSpan.innerText = appData.pageNames[i];
+                
+                const hintSpan = document.createElement('span');
+                hintSpan.className = 'edit-hint';
+                hintSpan.innerText = '✏️ مرتين للتعديل';
+
+                div.appendChild(textSpan);
+                div.appendChild(hintSpan);
+
+                // تغيير الصفحة عند الضغط مرة واحدة
+                div.onclick = () => switchPage(i);
+
+                // تعديل الاسم عند الضغط مرتين
+                div.ondblclick = (e) => {
+                    e.stopPropagation(); // منع الانتقال للصفحة أثناء التعديل
+                    const newName = prompt("أدخل اسماً جديداً لهذه الصفحة:", appData.pageNames[i]);
+                    if (newName !== null && newName.trim() !== "") {
+                        appData.pageNames[i] = newName.trim();
+                        textSpan.innerText = newName.trim();
+                        saveData();
+                    }
+                };
+                
+                div.title = "اضغط مرتين لتغيير اسم الصفحة";
+                pageList.appendChild(div);
+            }
+            updateTransform();
+            renderPage();
+        }
+
+        function saveData() { 
+            localStorage.setItem('brain_space_amiri', JSON.stringify(appData)); 
+            saveStatus.style.opacity = '1';
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => { saveStatus.style.opacity = '0'; }, 1500);
+        }
+
+        function backupData() {
+            saveData();
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "Afkari_Backup_" + new Date().toISOString().slice(0,10) + ".json");
+            document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove();
+        }
+
+        function restoreData(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const importedData = JSON.parse(e.target.result);
+                        if(importedData && importedData.workspaces) {
+                            appData = importedData; saveData(); init(); alert("تم استرجاع أفكارك بنجاح!");
+                        }
+                    } catch(err) { alert("عذراً، الملف غير صالح."); }
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        document.getElementById('toggle-sidebar').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('hidden');
+        });
+
+        // --- الزوم الصحيح بالأسهم ---
+        function updateTransform() { 
+            canvasWrapper.style.transform = `matrix(${zoomLevel}, 0, 0, ${zoomLevel}, ${panX}, ${panY})`; 
+        }
+
+        function doZoom(amount) {
+            const oldZoom = zoomLevel;
+            zoomLevel = Math.min(Math.max(zoomLevel + amount, 0.3), 2.5);
+            if (oldZoom !== zoomLevel) {
+                // التقريب والابتعاد نحو منتصف الشاشة بدقة
+                const cx = window.innerWidth / 2;
+                const cy = window.innerHeight / 2;
+                panX = cx - (cx - panX) * (zoomLevel / oldZoom);
+                panY = cy - (cy - panY) * (zoomLevel / oldZoom);
+                updateTransform();
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            const isEditing = document.activeElement.isContentEditable;
+            if (isEditing) return; 
+
+            // التحريك بالماوس ومسطرة المسافة
+            if (e.code === 'Space') { e.preventDefault(); isSpaceDown = true; mainContainer.classList.add('panning'); }
+            
+            // الزوم باستخدام الأسهم (كما طلبت تماماً)
+            if (e.code === 'ArrowUp') { e.preventDefault(); doZoom(0.05); } // يتقدم للأمام
+            if (e.code === 'ArrowDown') { e.preventDefault(); doZoom(-0.05); } // يرجع للوراء
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') { isSpaceDown = false; isPanning = false; mainContainer.classList.remove('panning'); }
+        });
+
+        mainContainer.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.node') || e.target.closest('.group-title')) return;
+            
+            if (isSpaceDown) {
+                isPanning = true; startPanX = e.clientX - panX; startPanY = e.clientY - panY;
+            } else {
+                isSelecting = true;
+                selStartX = (e.clientX - panX) / zoomLevel; selStartY = (e.clientY - panY) / zoomLevel;
+                selectionBoxEl.style.left = selStartX + 'px'; selectionBoxEl.style.top = selStartY + 'px';
+                selectionBoxEl.style.width = '0px'; selectionBoxEl.style.height = '0px'; selectionBoxEl.style.display = 'block';
+                clearSelection();
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            const mouseX = (e.clientX - panX) / zoomLevel; const mouseY = (e.clientY - panY) / zoomLevel;
+
+            if (isPanning) {
+                panX = e.clientX - startPanX; panY = e.clientY - startPanY; updateTransform();
+            } else if (isSelecting) {
+                const x = Math.min(mouseX, selStartX), y = Math.min(mouseY, selStartY);
+                const w = Math.abs(mouseX - selStartX), h = Math.abs(mouseY - selStartY);
+                selectionBoxEl.style.left = x + 'px'; selectionBoxEl.style.top = y + 'px';
+                selectionBoxEl.style.width = w + 'px'; selectionBoxEl.style.height = h + 'px';
+            } else if (draggedNode) {
+                const dx = mouseX - dragOffsetX - parseInt(draggedNode.style.left);
+                const dy = mouseY - dragOffsetY - parseInt(draggedNode.style.top);
+                
+                if(selectedNodes.has(draggedNode.id)) {
+                    selectedNodes.forEach(id => {
+                        const el = document.getElementById(id);
+                        el.style.left = (parseInt(el.style.left) + dx) + 'px'; el.style.top = (parseInt(el.style.top) + dy) + 'px';
+                    });
+                } else {
+                    draggedNode.style.left = (parseInt(draggedNode.style.left) + dx) + 'px'; draggedNode.style.top = (parseInt(draggedNode.style.top) + dy) + 'px';
+                }
+                dragOffsetX = mouseX - parseInt(draggedNode.style.left); dragOffsetY = mouseY - parseInt(draggedNode.style.top);
+                drawConnections(); renderGroups();
+            } else if (isDrawingLine && tempLine) {
+                tempLine.setAttribute('x2', mouseX); tempLine.setAttribute('y2', mouseY);
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isSelecting) {
+                isSelecting = false; selectionBoxEl.style.display = 'none';
+                const selRect = { x: parseInt(selectionBoxEl.style.left), y: parseInt(selectionBoxEl.style.top), w: parseInt(selectionBoxEl.style.width), h: parseInt(selectionBoxEl.style.height) };
+                
+                document.querySelectorAll('.node').forEach(nodeEl => {
+                    const nx = parseInt(nodeEl.style.left), ny = parseInt(nodeEl.style.top), nw = nodeEl.offsetWidth, nh = nodeEl.offsetHeight;
+                    if (nx < selRect.x + selRect.w && nx + nw > selRect.x && ny < selRect.y + selRect.h && ny + nh > selRect.y) {
+                        selectedNodes.add(nodeEl.id); nodeEl.classList.add('selected');
+                    }
+                });
+                if (selectedNodes.size > 1) { btnGroupCreate.style.display = 'block'; } else { clearSelection(); }
+            }
+            isPanning = false;
+            if (draggedNode) {
+                if(selectedNodes.has(draggedNode.id)){
+                    selectedNodes.forEach(id => { const el = document.getElementById(id); updateNodeData(id, 'x', parseInt(el.style.left)); updateNodeData(id, 'y', parseInt(el.style.top)); });
+                } else {
+                    updateNodeData(draggedNode.id, 'x', parseInt(draggedNode.style.left)); updateNodeData(draggedNode.id, 'y', parseInt(draggedNode.style.top));
+                }
+                draggedNode = null; saveData(); renderGroups();
+            }
+            if (isDrawingLine) { isDrawingLine = false; if (tempLine) tempLine.remove(); tempLine = null; startConnectNodeId = null; }
+        });
+
+        function switchPage(pageNum) { currentPage = pageNum; document.querySelectorAll('.page-item').forEach((el, index) => { el.classList.toggle('active', index + 1 === pageNum); }); clearSelection(); renderPage(); }
+
+        function renderPage() {
+            document.querySelectorAll('.node, .group-container').forEach(n => n.remove());
+            svgCanvas.innerHTML = '';
+            appData.workspaces[currentPage].nodes.forEach(createNodeElement);
+            drawConnections(); renderGroups();
+        }
+
+        mainContainer.addEventListener('dblclick', function(e) {
+            if (e.target !== mainContainer && e.target !== canvasWrapper && e.target !== canvas) return;
+            const x = (e.clientX - panX) / zoomLevel; const y = (e.clientY - panY) / zoomLevel;
+            const newNode = { id: 'node_' + Date.now(), x, y, text: '', type: 'type-normal' }; 
+            appData.workspaces[currentPage].nodes.push(newNode);
+            clearSelection();
+            const el = createNodeElement(newNode);
+            saveData();
+            setTimeout(() => el.focus(), 10);
+        });
+
+        function createNodeElement(data) {
+            const div = document.createElement('div');
+            div.className = `node ${data.type}`; div.id = data.id; div.contentEditable = true;
+            div.innerHTML = data.text || ''; 
+            div.style.left = data.x + 'px'; div.style.top = data.y + 'px';
+
+            div.addEventListener('mousedown', (e) => {
+                if (e.target.classList.contains('node-handle')) return;
+                if (!selectedNodes.has(div.id) && !e.shiftKey) clearSelection();
+                if (document.activeElement !== div) {
+                    draggedNode = div;
+                    dragOffsetX = (e.clientX - panX) / zoomLevel - parseInt(div.style.left);
+                    dragOffsetY = (e.clientY - panY) / zoomLevel - parseInt(div.style.top);
+                }
+            });
+
+            div.addEventListener('input', () => { updateNodeData(div.id, 'text', div.innerHTML); drawConnections(); renderGroups(); saveData();});
+            div.addEventListener('focus', () => { 
+                showToolbar(div); document.querySelectorAll('.node').forEach(n => n.style.zIndex = 10); div.style.zIndex = 100;
+            });
+            
+            div.addEventListener('mouseup', (e) => {
+                if (isDrawingLine && startConnectNodeId && startConnectNodeId !== div.id) {
+                    appData.workspaces[currentPage].connections.push({ from: startConnectNodeId, to: div.id });
+                    saveData(); drawConnections();
+                }
+            });
+
+            ['top', 'bottom', 'left', 'right'].forEach(pos => {
+                const handle = document.createElement('div'); handle.className = `node-handle handle-${pos}`; handle.contentEditable = false;
+                handle.addEventListener('mousedown', (e) => startConnection(e, div.id));
+                div.appendChild(handle);
+            });
+
+            canvas.appendChild(div); return div;
+        }
+
+        function clearSelection() {
+            selectedNodes.forEach(id => { const el = document.getElementById(id); if(el) el.classList.remove('selected'); });
+            selectedNodes.clear(); btnGroupCreate.style.display = 'none';
+        }
+
+        function createGroup() {
+            if (selectedNodes.size < 2) return;
+            const nodeIds = Array.from(selectedNodes);
+            appData.workspaces[currentPage].groups = appData.workspaces[currentPage].groups || [];
+            appData.workspaces[currentPage].groups.push({ id: 'group_' + Date.now(), title: 'مجموعة جديدة', nodes: nodeIds });
+            saveData(); clearSelection(); renderGroups();
+        }
+
+        function renderGroups() {
+            document.querySelectorAll('.group-container').forEach(g => g.remove());
+            const groups = appData.workspaces[currentPage].groups || [];
+            groups.forEach((group, index) => {
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, validNodes = 0;
+                group.nodes.forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el) {
+                        validNodes++; const x = parseInt(el.style.left), y = parseInt(el.style.top);
+                        minX = Math.min(minX, x); minY = Math.min(minY, y);
+                        maxX = Math.max(maxX, x + el.offsetWidth); maxY = Math.max(maxY, y + el.offsetHeight);
+                    }
+                });
+                if(validNodes < 1) return;
+
+                const padding = 35;
+                const gDiv = document.createElement('div'); gDiv.className = 'group-container';
+                gDiv.style.left = (minX - padding) + 'px'; gDiv.style.top = (minY - padding) + 'px';
+                gDiv.style.width = (maxX - minX + padding*2) + 'px'; gDiv.style.height = (maxY - minY + padding*2) + 'px';
+                
+                const title = document.createElement('div');
+                title.className = 'group-title'; title.contentEditable = true; title.innerText = group.title;
+                title.addEventListener('input', () => { appData.workspaces[currentPage].groups[index].title = title.innerText; saveData(); });
+                
+                gDiv.appendChild(title); canvas.insertBefore(gDiv, canvas.firstChild);
+            });
+        }
+
+        function startConnection(e, nodeId) {
+            e.stopPropagation(); isDrawingLine = true; startConnectNodeId = nodeId;
+            let startX = (e.clientX - panX) / zoomLevel; let startY = (e.clientY - panY) / zoomLevel;
+            tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            tempLine.setAttribute('x1', startX); tempLine.setAttribute('y1', startY);
+            tempLine.setAttribute('x2', startX); tempLine.setAttribute('y2', startY);
+            tempLine.classList.add('temp-line'); svgCanvas.appendChild(tempLine);
+        }
+
+        function drawConnections() {
+            svgCanvas.innerHTML = '';
+            appData.workspaces[currentPage].connections.forEach(conn => {
+                const el1 = document.getElementById(conn.from), el2 = document.getElementById(conn.to);
+                if (el1 && el2) {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', el1.offsetLeft + el1.offsetWidth/2); line.setAttribute('y1', el1.offsetTop + el1.offsetHeight/2);
+                    line.setAttribute('x2', el2.offsetLeft + el2.offsetWidth/2); line.setAttribute('y2', el2.offsetTop + el2.offsetHeight/2);
+                    svgCanvas.appendChild(line);
+                }
+            });
+        }
+
+        function updateNodeData(id, key, value) {
+            const node = appData.workspaces[currentPage].nodes.find(n => n.id === id);
+            if (node) { node[key] = value; }
+        }
+
+        function showToolbar(node) { activeNode = node; document.getElementById('toolbar').style.display = 'flex'; }
+        
+        mainContainer.addEventListener('mousedown', (e) => {
+            if(e.target === mainContainer || e.target === canvasWrapper || e.target === canvas || e.target.id === 'selection-box') {
+                document.getElementById('toolbar').style.display = 'none'; activeNode = null;
+            }
+        });
+
+        function changeType(type) {
+            if(!activeNode) return;
+            activeNode.classList.remove('type-normal', 'type-medium', 'type-important');
+            activeNode.classList.add(type);
+            updateNodeData(activeNode.id, 'type', type);
+            drawConnections(); renderGroups(); saveData();
+        }
+
+        function deleteActiveNodes() {
+            if(!activeNode && selectedNodes.size === 0) return;
+            let toDelete = activeNode ? [activeNode.id] : Array.from(selectedNodes);
+            
+            toDelete.forEach(id => {
+                appData.workspaces[currentPage].nodes = appData.workspaces[currentPage].nodes.filter(n => n.id !== id);
+                appData.workspaces[currentPage].connections = appData.workspaces[currentPage].connections.filter(c => c.from !== id && c.to !== id);
+                const el = document.getElementById(id); if(el) el.remove();
+            });
+            
+            document.getElementById('toolbar').style.display = 'none';
+            activeNode = null; clearSelection(); drawConnections(); renderGroups(); saveData();
+        }
+
+        init();
+    </script>
+</body>
+</html>
